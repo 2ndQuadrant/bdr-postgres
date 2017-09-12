@@ -2684,6 +2684,7 @@ WalSndLastCycleHandler(SIGNAL_ARGS)
 {
 	int			save_errno = errno;
 
+	got_SIGUSR2 = true;
 	if (MyWalSnd)
 		SetLatch(&MyWalSnd->latch);
 
