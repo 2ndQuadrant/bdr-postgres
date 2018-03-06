@@ -26,6 +26,7 @@
 
 #include "dumputils.h"
 #include "pg_backup.h"
+#include "fe_utils/connect.h"
 
 /* version string we expect back from pg_dump */
 #define PGDUMP_VERSIONSTR "pg_dump (PostgreSQL) " PG_VERSION "\n"
@@ -51,9 +52,10 @@ static void dumpDatabases(PGconn *conn);
 static void dumpTimestamp(char *msg);
 
 static int	runPgDump(const char *dbname);
-static void buildShSecLabels(PGconn *conn, const char *catalog_name,
-				 uint32 objectId, PQExpBuffer buffer,
-				 const char *target, const char *objname);
+static void buildShSecLabels(PGconn *conn,
+				 const char *catalog_name, Oid objectId,
+				 const char *objtype, const char *objname,
+				 PQExpBuffer buffer);
 static PGconn *connectDatabase(const char *dbname, const char *connstr, const char *pghost, const char *pgport,
 	  const char *pguser, enum trivalue prompt_password, bool fail_on_error);
 static char *constructConnStr(const char **keywords, const char **values);
@@ -835,7 +837,8 @@ dumpRoles(PGconn *conn)
 
 		if (!no_security_labels && server_version >= 90200)
 			buildShSecLabels(conn, "pg_authid", auth_oid,
-							 buf, "ROLE", rolename);
+							 "ROLE", rolename,
+							 buf);
 
 		fprintf(OPF, "%s", buf->data);
 	}
@@ -1070,7 +1073,7 @@ dumpTablespaces(PGconn *conn)
 	for (i = 0; i < PQntuples(res); i++)
 	{
 		PQExpBuffer buf = createPQExpBuffer();
-		uint32		spcoid = atooid(PQgetvalue(res, i, 0));
+		Oid			spcoid = atooid(PQgetvalue(res, i, 0));
 		char	   *spcname = PQgetvalue(res, i, 1);
 		char	   *spcowner = PQgetvalue(res, i, 2);
 		char	   *spclocation = PQgetvalue(res, i, 3);
@@ -1094,11 +1097,12 @@ dumpTablespaces(PGconn *conn)
 							  fspcname, spcoptions);
 
 		if (!skip_acls &&
-			!buildACLCommands(fspcname, NULL, "TABLESPACE", spcacl, spcowner,
+			!buildACLCommands(fspcname, NULL, NULL, "TABLESPACE",
+							  spcacl, spcowner,
 							  "", server_version, buf))
 		{
 			fprintf(stderr, _("%s: could not parse ACL list (%s) for tablespace \"%s\"\n"),
-					progname, spcacl, fspcname);
+					progname, spcacl, spcname);
 			PQfinish(conn);
 			exit_nicely(1);
 		}
@@ -1112,7 +1116,8 @@ dumpTablespaces(PGconn *conn)
 
 		if (!no_security_labels && server_version >= 90200)
 			buildShSecLabels(conn, "pg_tablespace", spcoid,
-							 buf, "TABLESPACE", fspcname);
+							 "TABLESPACE", spcname,
+							 buf);
 
 		fprintf(OPF, "%s", buf->data);
 
@@ -1429,7 +1434,7 @@ dumpCreateDB(PGconn *conn)
 		}
 
 		if (!skip_acls &&
-			!buildACLCommands(fdbname, NULL, "DATABASE", dbacl, dbowner,
+			!buildACLCommands(fdbname, NULL, NULL, "DATABASE", dbacl, dbowner,
 							  "", server_version, buf))
 		{
 			fprintf(stderr, _("%s: could not parse ACL list (%s) for database \"%s\"\n"),
@@ -1739,19 +1744,23 @@ runPgDump(const char *dbname)
  *
  * Build SECURITY LABEL command(s) for an shared object
  *
- * The caller has to provide object type and identifier to select security
- * labels from pg_seclabels system view.
+ * The caller has to provide object type and identity in two separate formats:
+ * catalog_name (e.g., "pg_database") and object OID, as well as
+ * type name (e.g., "DATABASE") and object name (not pre-quoted).
+ *
+ * The command(s) are appended to "buffer".
  */
 static void
-buildShSecLabels(PGconn *conn, const char *catalog_name, uint32 objectId,
-				 PQExpBuffer buffer, const char *target, const char *objname)
+buildShSecLabels(PGconn *conn, const char *catalog_name, Oid objectId,
+				 const char *objtype, const char *objname,
+				 PQExpBuffer buffer)
 {
 	PQExpBuffer sql = createPQExpBuffer();
 	PGresult   *res;
 
 	buildShSecLabelQuery(conn, catalog_name, objectId, sql);
 	res = executeQuery(conn, sql->data);
-	emitShSecLabels(conn, res, buffer, target, objname);
+	emitShSecLabels(conn, res, buffer, objtype, objname);
 
 	PQclear(res);
 	destroyPQExpBuffer(sql);
@@ -1962,12 +1971,8 @@ connectDatabase(const char *dbname, const char *connection_string,
 		exit_nicely(1);
 	}
 
-	/*
-	 * On 7.3 and later, make sure we are not fooled by non-system schemas in
-	 * the search path.
-	 */
 	if (server_version >= 70300)
-		executeCommand(conn, "SET search_path = pg_catalog");
+		PQclear(executeQuery(conn, ALWAYS_SECURE_SEARCH_PATH_SQL));
 
 	return conn;
 }

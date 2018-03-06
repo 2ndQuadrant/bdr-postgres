@@ -24,7 +24,7 @@
  * installation script.
  */
 extern PGDLLIMPORT bool creating_extension;
-extern Oid	CurrentExtensionObject;
+extern PGDLLIMPORT Oid CurrentExtensionObject;
 
 
 extern Oid	CreateExtension(CreateExtensionStmt *stmt);

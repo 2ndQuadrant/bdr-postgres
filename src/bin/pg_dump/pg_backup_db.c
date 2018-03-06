@@ -10,6 +10,7 @@
  *-------------------------------------------------------------------------
  */
 
+#include "fe_utils/connect.h"
 #include "pg_backup_db.h"
 #include "pg_backup_utils.h"
 #include "dumputils.h"
@@ -95,6 +96,11 @@ ReconnectToServer(ArchiveHandle *AH, const char *dbname, const char *username)
 
 	PQfinish(AH->connection);
 	AH->connection = newConn;
+
+	/* Start strict; later phases may override this. */
+	if (PQserverVersion(AH->connection) >= 70300)
+		PQclear(ExecuteSqlQueryForSingleRow((Archive *) AH,
+											ALWAYS_SECURE_SEARCH_PATH_SQL));
 
 	return 1;
 }
@@ -304,6 +310,11 @@ ConnectDatabase(Archive *AHX,
 					  PQdb(AH->connection) ? PQdb(AH->connection) : "",
 					  PQerrorMessage(AH->connection));
 
+	/* Start strict; later phases may override this. */
+	if (PQserverVersion(AH->connection) >= 70300)
+		PQclear(ExecuteSqlQueryForSingleRow((Archive *) AH,
+											ALWAYS_SECURE_SEARCH_PATH_SQL));
+
 	/*
 	 * We want to remember connection's actual password, whether or not we got
 	 * it by prompting.  So we don't just store the password variable.
@@ -403,6 +414,29 @@ ExecuteSqlQuery(Archive *AHX, const char *query, ExecStatusType status)
 	res = PQexec(AH->connection, query);
 	if (PQresultStatus(res) != status)
 		die_on_query_failure(AH, modulename, query);
+	return res;
+}
+
+/*
+ * Execute an SQL query and verify that we got exactly one row back.
+ */
+PGresult *
+ExecuteSqlQueryForSingleRow(Archive *fout, char *query)
+{
+	PGresult   *res;
+	int			ntups;
+
+	res = ExecuteSqlQuery(fout, query, PGRES_TUPLES_OK);
+
+	/* Expecting a single result only */
+	ntups = PQntuples(res);
+	if (ntups != 1)
+		exit_horribly(NULL,
+					  ngettext("query returned %d row instead of one: %s\n",
+							   "query returned %d rows instead of one: %s\n",
+							   ntups),
+					  ntups, query);
+
 	return res;
 }
 

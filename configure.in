@@ -17,7 +17,7 @@ dnl Read the Autoconf manual for details.
 dnl
 m4_pattern_forbid(^PGAC_)dnl to catch undefined macros
 
-AC_INIT([PostgreSQL], [9.4.15], [pgsql-bugs@postgresql.org])
+AC_INIT([PostgreSQL], [9.4.17], [pgsql-bugs@postgresql.org])
 
 m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
 Untested combinations of 'autoconf' and PostgreSQL versions are not
@@ -979,8 +979,8 @@ if test "$with_openssl" = yes ; then
      AC_CHECK_LIB(crypto, CRYPTO_new_ex_data, [], [AC_MSG_ERROR([library 'crypto' is required for OpenSSL])])
      AC_CHECK_LIB(ssl,    SSL_new, [], [AC_MSG_ERROR([library 'ssl' is required for OpenSSL])])
   else
-     AC_SEARCH_LIBS(CRYPTO_new_ex_data, eay32 crypto, [], [AC_MSG_ERROR([library 'eay32' or 'crypto' is required for OpenSSL])])
-     AC_SEARCH_LIBS(SSL_new, ssleay32 ssl, [], [AC_MSG_ERROR([library 'ssleay32' or 'ssl' is required for OpenSSL])])
+     AC_SEARCH_LIBS(CRYPTO_new_ex_data, [eay32 crypto], [], [AC_MSG_ERROR([library 'eay32' or 'crypto' is required for OpenSSL])])
+     AC_SEARCH_LIBS(SSL_new, [ssleay32 ssl], [], [AC_MSG_ERROR([library 'ssleay32' or 'ssl' is required for OpenSSL])])
   fi
   AC_CHECK_FUNCS([SSL_get_current_compression])
   # Functions introduced in OpenSSL 1.1.0. We used to check for
@@ -1179,6 +1179,12 @@ fi
 
 if test "$with_bonjour" = yes ; then
   AC_CHECK_HEADER(dns_sd.h, [], [AC_MSG_ERROR([header file <dns_sd.h> is required for Bonjour])])
+dnl At some point we might add something like
+dnl AC_SEARCH_LIBS(DNSServiceRegister, dns_sd)
+dnl but right now, what that would mainly accomplish is to encourage
+dnl people to try to use the avahi implementation, which does not work.
+dnl If you want to use Apple's own Bonjour code on another platform,
+dnl just add -ldns_sd to LIBS manually.
 fi
 
 # for contrib/uuid-ossp
