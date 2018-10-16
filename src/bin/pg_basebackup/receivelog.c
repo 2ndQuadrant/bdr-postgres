@@ -137,8 +137,12 @@ open_walfile(XLogRecPtr startpoint, uint32 timeline, char *basedir,
 	zerobuf = pg_malloc0(XLOG_BLCKSZ);
 	for (bytes = 0; bytes < XLogSegSize; bytes += XLOG_BLCKSZ)
 	{
+		errno = 0;
 		if (write(f, zerobuf, XLOG_BLCKSZ) != XLOG_BLCKSZ)
 		{
+			/* if write didn't set errno, assume problem is no disk space */
+			if (errno == 0)
+				errno = ENOSPC;
 			fprintf(stderr,
 					_("%s: could not pad transaction log file \"%s\": %s\n"),
 					progname, fn, strerror(errno));
@@ -325,7 +329,9 @@ writeTimeLineHistoryFile(char *basedir, TimeLineID tli, char *filename,
 		 */
 		close(fd);
 		unlink(tmppath);
-		errno = save_errno;
+
+		/* if write didn't set errno, assume problem is no disk space */
+		errno = save_errno ? save_errno : ENOSPC;
 
 		fprintf(stderr, _("%s: could not write timeline history file \"%s\": %s\n"),
 				progname, tmppath, strerror(errno));
@@ -334,7 +340,10 @@ writeTimeLineHistoryFile(char *basedir, TimeLineID tli, char *filename,
 
 	if (fsync(fd) != 0)
 	{
+		int			save_errno = errno;
+
 		close(fd);
+		errno = save_errno;
 		fprintf(stderr, _("%s: could not fsync file \"%s\": %s\n"),
 				progname, tmppath, strerror(errno));
 		return false;
@@ -1086,10 +1095,17 @@ HandleCopyStream(PGconn *conn, XLogRecPtr startpos, uint32 timeline,
 					}
 				}
 
+				errno = 0;
 				if (write(walfile,
 						  copybuf + hdr_len + bytes_written,
 						  bytes_to_write) != bytes_to_write)
 				{
+					/*
+					 * If write didn't set errno, assume problem is no disk
+					 * space.
+					 */
+					if (errno == 0)
+						errno = ENOSPC;
 					fprintf(stderr,
 							_("%s: could not write %u bytes to WAL file \"%s\": %s\n"),
 							progname, bytes_to_write, current_walfile_name,

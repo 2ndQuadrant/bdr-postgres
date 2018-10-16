@@ -795,9 +795,9 @@ SnapBuildDistributeNewCatalogSnapshot(SnapBuild *builder, XLogRecPtr lsn)
 		 * all. We'll add a snapshot when the first change gets queued.
 		 *
 		 * NB: This works correctly even for subtransactions because
-		 * ReorderBufferCommitChild() takes care to pass the parent the base
-		 * snapshot, and while iterating the changequeue we'll get the change
-		 * from the subtxn.
+		 * ReorderBufferAssignChild() takes care to transfer the base snapshot
+		 * to the top-level transaction, and while iterating the changequeue
+		 * we'll get the change from the subtxn.
 		 */
 		if (!ReorderBufferXidHasBaseSnapshot(builder->reorder, txn->xid))
 			continue;
@@ -1038,7 +1038,7 @@ SnapBuildCommitTxn(SnapBuild *builder, XLogRecPtr lsn, TransactionId xid,
 		/* refcount of the snapshot builder for the new snapshot */
 		SnapBuildSnapIncRefcount(builder->snapshot);
 
-		/* add a new SnapshotNow to all currently running transactions */
+		/* add a new catalog snapshot to all currently running transactions */
 		SnapBuildDistributeNewCatalogSnapshot(builder, lsn);
 	}
 }
@@ -1058,6 +1058,7 @@ void
 SnapBuildProcessRunningXacts(SnapBuild *builder, XLogRecPtr lsn, xl_running_xacts *running)
 {
 	ReorderBufferTXN *txn;
+	TransactionId xmin;
 
 	/*
 	 * If we're not consistent yet, inspect the record to see whether it
@@ -1090,15 +1091,21 @@ SnapBuildProcessRunningXacts(SnapBuild *builder, XLogRecPtr lsn, xl_running_xact
 	/* Remove transactions we don't need to keep track off anymore */
 	SnapBuildPurgeCommittedTxn(builder);
 
-	elog(DEBUG3, "xmin: %u, xmax: %u, oldestrunning: %u",
-		 builder->xmin, builder->xmax,
-		 running->oldestRunningXid);
-
 	/*
-	 * Inrease shared memory limits, so vacuum can work on tuples we prevented
-	 * from being pruned till now.
+	 * Advance the xmin limit for the current replication slot, to allow
+	 * vacuum to clean up the tuples this slot has been protecting.
+	 *
+	 * The reorderbuffer might have an xmin among the currently running
+	 * snapshots; use it if so.  If not, we need only consider the snapshots
+	 * we'll produce later, which can't be less than the oldest running xid in
+	 * the record we're reading now.
 	 */
-	LogicalIncreaseXminForSlot(lsn, running->oldestRunningXid);
+	xmin = ReorderBufferGetOldestXmin(builder->reorder);
+	if (xmin == InvalidTransactionId)
+		xmin = running->oldestRunningXid;
+	elog(DEBUG3, "xmin: %u, xmax: %u, oldest running: %u, oldest xmin: %u",
+		 builder->xmin, builder->xmax, running->oldestRunningXid, xmin);
+	LogicalIncreaseXminForSlot(lsn, xmin);
 
 	/*
 	 * Also tell the slot where we can restart decoding from. We don't want to
@@ -1564,9 +1571,15 @@ SnapBuildSerialize(SnapBuild *builder, XLogRecPtr lsn)
 		ereport(ERROR,
 				(errmsg("could not open file \"%s\": %m", path)));
 
+	errno = 0;
 	if ((write(fd, ondisk, needed_length)) != needed_length)
 	{
+		int			save_errno = errno;
+
 		CloseTransientFile(fd);
+
+		/* if write didn't set errno, assume problem is no disk space */
+		errno = save_errno ? save_errno : ENOSPC;
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not write to file \"%s\": %m", tmppath)));
@@ -1582,7 +1595,10 @@ SnapBuildSerialize(SnapBuild *builder, XLogRecPtr lsn)
 	 */
 	if (pg_fsync(fd) != 0)
 	{
+		int			save_errno = errno;
+
 		CloseTransientFile(fd);
+		errno = save_errno;
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not fsync file \"%s\": %m", tmppath)));
@@ -1664,7 +1680,10 @@ SnapBuildRestore(SnapBuild *builder, XLogRecPtr lsn)
 	readBytes = read(fd, &ondisk, SnapBuildOnDiskConstantSize);
 	if (readBytes != SnapBuildOnDiskConstantSize)
 	{
+		int			save_errno = errno;
+
 		CloseTransientFile(fd);
+		errno = save_errno;
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not read file \"%s\", read %d of %d: %m",
@@ -1690,7 +1709,10 @@ SnapBuildRestore(SnapBuild *builder, XLogRecPtr lsn)
 	readBytes = read(fd, &ondisk.builder, sizeof(SnapBuild));
 	if (readBytes != sizeof(SnapBuild))
 	{
+		int			save_errno = errno;
+
 		CloseTransientFile(fd);
+		errno = save_errno;
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not read file \"%s\", read %d of %d: %m",
@@ -1705,7 +1727,10 @@ SnapBuildRestore(SnapBuild *builder, XLogRecPtr lsn)
 	readBytes = read(fd, ondisk.builder.was_running.was_xip, sz);
 	if (readBytes != sz)
 	{
+		int			save_errno = errno;
+
 		CloseTransientFile(fd);
+		errno = save_errno;
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not read file \"%s\", read %d of %d: %m",
@@ -1719,7 +1744,10 @@ SnapBuildRestore(SnapBuild *builder, XLogRecPtr lsn)
 	readBytes = read(fd, ondisk.builder.committed.xip, sz);
 	if (readBytes != sz)
 	{
+		int			save_errno = errno;
+
 		CloseTransientFile(fd);
+		errno = save_errno;
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not read file \"%s\", read %d of %d: %m",
