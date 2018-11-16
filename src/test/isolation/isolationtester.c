@@ -883,7 +883,7 @@ try_complete_step(TestSpec * testspec, Step * step, int flags)
 			if (PQresultStatus(res) != PGRES_TUPLES_OK)
 			{
 				fprintf(stderr, "lock wait query failed: %s",
-						PQerrorMessage(conn));
+						PQerrorMessage(conns[0]));
 				exit_nicely();
 			}
 			ntuples = PQntuples(res);

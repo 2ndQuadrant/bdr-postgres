@@ -17,7 +17,7 @@ dnl Read the Autoconf manual for details.
 dnl
 m4_pattern_forbid(^PGAC_)dnl to catch undefined macros
 
-AC_INIT([PostgreSQL], [9.4.19], [pgsql-bugs@postgresql.org])
+AC_INIT([PostgreSQL], [9.4.20], [pgsql-bugs@postgresql.org])
 
 m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
 Untested combinations of 'autoconf' and PostgreSQL versions are not
@@ -526,6 +526,24 @@ choke me
 @%:@endif], [], [AC_MSG_ERROR([do not put -ffast-math in CFLAGS])])
 fi
 
+# Defend against clang being used on x86-32 without SSE2 enabled.  As current
+# versions of clang do not understand -fexcess-precision=standard, the use of
+# x87 floating point operations leads to problems like isinf possibly returning
+# false for a value that is infinite when converted from the 80bit register to
+# the 8byte memory representation.
+#
+# Only perform the test if the compiler doesn't understand
+# -fexcess-precision=standard, that way a potentially fixed compiler will work
+# automatically.
+if test "$pgac_cv_prog_cc_cflags__fexcess_precision_standard" = no; then
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [
+@%:@if defined(__clang__) && defined(__i386__) && !defined(__SSE2_MATH__)
+choke me
+@%:@endif
+])], [],
+[AC_MSG_ERROR([Compiling PostgreSQL with clang, on 32bit x86, requires SSE2 support. Use -msse2 or use gcc.])])
+fi
+
 AC_PROG_CPP
 AC_SUBST(GCC)
 
@@ -897,6 +915,16 @@ if test "$with_perl" = yes; then
     AC_MSG_ERROR([Perl not found])
   fi
   PGAC_CHECK_PERL_CONFIGS([archlibexp,privlibexp,useshrplib])
+  # On most platforms, archlibexp is also where the Perl include files live ...
+  perl_includespec="-I$perl_archlibexp/CORE"
+  # ... but on newer macOS versions, we must use -iwithsysroot to look
+  # under $PG_SYSROOT
+  if test \! -f "$perl_archlibexp/CORE/perl.h" ; then
+    if test -f "$PG_SYSROOT$perl_archlibexp/CORE/perl.h" ; then
+      perl_includespec="-iwithsysroot $perl_archlibexp/CORE"
+    fi
+  fi
+  AC_SUBST(perl_includespec)dnl
   PGAC_CHECK_PERL_EMBED_CCFLAGS
   PGAC_CHECK_PERL_EMBED_LDFLAGS
 fi
@@ -1916,7 +1944,7 @@ fi
 # check for <perl.h>
 if test "$with_perl" = yes; then
   ac_save_CPPFLAGS=$CPPFLAGS
-  CPPFLAGS="$CPPFLAGS -I$perl_archlibexp/CORE"
+  CPPFLAGS="$CPPFLAGS $perl_includespec"
   AC_CHECK_HEADER(perl.h, [], [AC_MSG_ERROR([header file <perl.h> is required for Perl])],
                   [#include <EXTERN.h>])
   # While we're at it, check that we can link to libperl.
@@ -2043,6 +2071,15 @@ tr '.' '	' |
 $AWK '{printf "%d%02d%02d", $1, $2, (NF >= 3) ? $3 : 0}'`"]
 AC_DEFINE_UNQUOTED(PG_VERSION_NUM, $PG_VERSION_NUM, [PostgreSQL version as a number])
 AC_SUBST(PG_VERSION_NUM)
+
+# If we are inserting PG_SYSROOT into CPPFLAGS, do so symbolically not
+# literally, so that it's possible to override it at build time using
+# a command like "make ... PG_SYSROOT=path".  This has to be done after
+# we've finished all configure checks that depend on CPPFLAGS.
+if test x"$PG_SYSROOT" != x; then
+  CPPFLAGS=`echo "$CPPFLAGS" | sed -e "s| $PG_SYSROOT | \\\$(PG_SYSROOT) |"`
+fi
+AC_SUBST(PG_SYSROOT)
 
 
 # Begin output steps
