@@ -690,8 +690,30 @@ ginRedoDeletePage(XLogRecPtr lsn, XLogRecord *record)
 	ginxlogDeletePage *data = (ginxlogDeletePage *) XLogRecGetData(record);
 	Buffer		dbuffer;
 	Buffer		pbuffer;
-	Buffer		lbuffer;
+	Buffer		lbuffer = InvalidBlockNumber;
 	Page		page;
+
+	/*
+	 * Lock left page first in order to prevent possible deadlock with
+	 * ginStepRight().
+	 */
+	if (record->xl_info & XLR_BKP_BLOCK(2))
+		lbuffer = RestoreBackupBlock(lsn, record, 2, false, true);
+	else if (data->leftBlkno != InvalidBlockNumber)
+	{
+		lbuffer = XLogReadBuffer(data->node, data->leftBlkno, false);
+		if (BufferIsValid(lbuffer))
+		{
+			page = BufferGetPage(lbuffer);
+			if (lsn > PageGetLSN(page))
+			{
+				Assert(GinPageIsData(page));
+				GinPageGetOpaque(page)->rightlink = data->rightLink;
+				PageSetLSN(page, lsn);
+				MarkBufferDirty(lbuffer);
+			}
+		}
+	}
 
 	if (record->xl_info & XLR_BKP_BLOCK(0))
 		dbuffer = RestoreBackupBlock(lsn, record, 0, false, true);
@@ -712,7 +734,7 @@ ginRedoDeletePage(XLogRecPtr lsn, XLogRecord *record)
 	}
 
 	if (record->xl_info & XLR_BKP_BLOCK(1))
-		pbuffer = RestoreBackupBlock(lsn, record, 1, false, true);
+		(void) RestoreBackupBlock(lsn, record, 1, false, false);
 	else
 	{
 		pbuffer = XLogReadBuffer(data->node, data->parentBlkno, false);
@@ -727,30 +749,12 @@ ginRedoDeletePage(XLogRecPtr lsn, XLogRecord *record)
 				PageSetLSN(page, lsn);
 				MarkBufferDirty(pbuffer);
 			}
+			UnlockReleaseBuffer(pbuffer);
 		}
 	}
 
-	if (record->xl_info & XLR_BKP_BLOCK(2))
-		(void) RestoreBackupBlock(lsn, record, 2, false, false);
-	else if (data->leftBlkno != InvalidBlockNumber)
-	{
-		lbuffer = XLogReadBuffer(data->node, data->leftBlkno, false);
-		if (BufferIsValid(lbuffer))
-		{
-			page = BufferGetPage(lbuffer);
-			if (lsn > PageGetLSN(page))
-			{
-				Assert(GinPageIsData(page));
-				GinPageGetOpaque(page)->rightlink = data->rightLink;
-				PageSetLSN(page, lsn);
-				MarkBufferDirty(lbuffer);
-			}
-			UnlockReleaseBuffer(lbuffer);
-		}
-	}
-
-	if (BufferIsValid(pbuffer))
-		UnlockReleaseBuffer(pbuffer);
+	if (BufferIsValid(lbuffer))
+		UnlockReleaseBuffer(lbuffer);
 	if (BufferIsValid(dbuffer))
 		UnlockReleaseBuffer(dbuffer);
 }

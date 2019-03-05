@@ -3424,7 +3424,7 @@ create_xlog_or_symlink(void)
 			exit_nicely();
 		}
 #else
-		fprintf(stderr, _("%s: symlinks are not supported on this platform"));
+		fprintf(stderr, _("%s: symlinks are not supported on this platform\n"), progname);
 		exit_nicely();
 #endif
 	}
