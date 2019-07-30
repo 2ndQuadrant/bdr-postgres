@@ -1,6 +1,625 @@
 <!-- doc/src/sgml/release-9.4.sgml -->
 <!-- See header comment in release.sgml about typical markup -->
 
+ <sect1 id="release-9-4-23">
+  <title>Release 9.4.23</title>
+
+  <formalpara>
+  <title>Release date:</title>
+  <para>2019-06-20</para>
+  </formalpara>
+
+  <para>
+   This release contains a variety of fixes from 9.4.22.
+   For information about new features in the 9.4 major release, see
+   <xref linkend="release-9-4">.
+  </para>
+
+  <para>
+   The <productname>PostgreSQL</productname> community will stop
+   releasing updates for the 9.4.X release series in February 2020.
+   Users are encouraged to update to a newer release branch soon.
+  </para>
+
+  <sect2>
+   <title>Migration to Version 9.4.23</title>
+
+   <para>
+    A dump/restore is not required for those running 9.4.X.
+   </para>
+
+   <para>
+    However, if you are upgrading from a version earlier than 9.4.18,
+    see <xref linkend="release-9-4-18">.
+   </para>
+  </sect2>
+
+  <sect2>
+   <title>Changes</title>
+
+   <itemizedlist>
+
+    <listitem>
+<!--
+Author: Tom Lane <tgl@sss.pgh.pa.us>
+Branch: master [e76de8861] 2019-06-12 12:29:39 -0400
+Branch: REL_11_STABLE [0b6edb9fb] 2019-06-12 12:29:41 -0400
+Branch: REL_10_STABLE [2981e5a61] 2019-06-12 12:29:42 -0400
+Branch: REL9_6_STABLE [77d45b790] 2019-06-12 12:29:43 -0400
+Branch: REL9_5_STABLE [f7e99de95] 2019-06-12 12:29:45 -0400
+Branch: REL9_4_STABLE [9695ecf36] 2019-06-12 12:29:25 -0400
+-->
+     <para>
+      Fix failure of <command>ALTER TABLE ... ALTER COLUMN TYPE</command>
+      when the table has a partial exclusion constraint (Tom Lane)
+     </para>
+    </listitem>
+
+    <listitem>
+<!--
+Author: Tom Lane <tgl@sss.pgh.pa.us>
+Branch: master [3d99a8139] 2019-06-12 19:43:08 -0400
+Branch: REL_11_STABLE [f95d8f810] 2019-06-12 19:43:09 -0400
+Branch: REL_10_STABLE [30d3df0a7] 2019-06-12 19:43:10 -0400
+Branch: REL9_6_STABLE [ad3e61b28] 2019-06-12 19:42:39 -0400
+Branch: REL9_5_STABLE [bf612fd3a] 2019-06-12 19:42:39 -0400
+Branch: REL9_4_STABLE [8ace51a6b] 2019-06-12 19:42:39 -0400
+-->
+     <para>
+      Fix incorrect printing of queries with duplicate join names
+      (Philip Dub&eacute;)
+     </para>
+
+     <para>
+      This oversight caused a dump/restore failure for views containing
+      such queries.
+     </para>
+    </listitem>
+
+    <listitem>
+<!--
+Author: Tom Lane <tgl@sss.pgh.pa.us>
+Branch: master [8a29ed053] 2019-05-12 18:53:38 -0400
+Branch: REL_11_STABLE [72ce7acaf] 2019-05-12 18:53:40 -0400
+Branch: REL_10_STABLE [940f64792] 2019-05-12 18:53:41 -0400
+Branch: REL9_6_STABLE [2a3dbc151] 2019-05-12 18:53:42 -0400
+Branch: REL9_5_STABLE [d6de52636] 2019-05-12 18:53:43 -0400
+Branch: REL9_4_STABLE [b1ca28e57] 2019-05-12 18:53:45 -0400
+-->
+     <para>
+      Fix misoptimization of <literal>{1,1}</literal> quantifiers in
+      regular expressions (Tom Lane)
+     </para>
+
+     <para>
+      Such quantifiers were treated as no-ops and optimized away;
+      but the documentation specifies that they impose greediness, or
+      non-greediness in the case of the non-greedy
+      variant <literal>{1,1}?</literal>, on the subexpression they're
+      attached to, and this did not happen.  The misbehavior occurred
+      only if the subexpression contained capturing parentheses or a
+      back-reference.
+     </para>
+    </listitem>
+
+    <listitem>
+<!--
+Author: Tom Lane <tgl@sss.pgh.pa.us>
+Branch: master [610747d86] 2019-05-10 14:56:41 -0400
+Branch: REL_11_STABLE [803f90ab7] 2019-05-10 14:56:41 -0400
+Branch: REL_10_STABLE [3dcf45af5] 2019-05-10 14:56:41 -0400
+Branch: REL9_6_STABLE [a73c8caea] 2019-05-10 14:56:41 -0400
+Branch: REL9_5_STABLE [91a05390c] 2019-05-10 14:56:41 -0400
+Branch: REL9_4_STABLE [b1cde67a4] 2019-05-10 14:56:41 -0400
+-->
+     <para>
+      Fix race condition in check to see whether a pre-existing shared
+      memory segment is still in use by a conflicting postmaster (Tom Lane)
+     </para>
+    </listitem>
+
+    <listitem>
+<!--
+Author: Andres Freund <andres@anarazel.de>
+Branch: master [fff2a7d7b] 2019-06-10 23:34:50 -0700
+Branch: REL_11_STABLE [c01556017] 2019-06-10 23:35:38 -0700
+Branch: REL_10_STABLE [52ad5fc0a] 2019-06-10 23:36:48 -0700
+Branch: REL9_6_STABLE [b8607e15e] 2019-06-10 23:36:55 -0700
+Branch: REL9_5_STABLE [483b2d7ae] 2019-06-10 23:36:59 -0700
+Branch: REL9_4_STABLE [69f32206d] 2019-06-10 23:37:02 -0700
+-->
+     <para>
+      Avoid attempting to do database accesses for parameter checking in
+      processes that are not connected to a specific database (Vignesh C,
+      Andres Freund)
+     </para>
+
+     <para>
+      This error could result in failures like <quote>cannot read pg_class
+      without having selected a database</quote>.
+     </para>
+    </listitem>
+
+    <listitem>
+<!--
+Author: Tom Lane <tgl@sss.pgh.pa.us>
+Branch: master [23bd3cec6] 2018-09-13 12:36:21 -0400
+Branch: REL_11_STABLE [995b4fe0b] 2019-06-14 11:25:13 -0400
+Branch: REL_10_STABLE [8de574aa8] 2019-06-14 11:25:13 -0400
+Branch: REL9_6_STABLE [75b0f21e1] 2019-06-14 11:25:13 -0400
+Branch: REL9_5_STABLE [77dc741a1] 2019-06-14 11:25:13 -0400
+Branch: REL9_4_STABLE [37011bcb3] 2019-06-14 11:25:13 -0400
+Author: Andrew Gierth <rhodiumtoad@postgresql.org>
+Branch: master [e3846a00c] 2019-06-15 18:15:23 +0100
+Branch: REL_11_STABLE [7f28fc8e9] 2019-06-15 18:16:43 +0100
+Branch: REL_10_STABLE [2913a892e] 2019-06-15 18:18:03 +0100
+Branch: REL9_6_STABLE [5f5b6667e] 2019-06-15 18:19:30 +0100
+Branch: REL9_5_STABLE [6335f8a99] 2019-06-15 18:21:41 +0100
+Branch: REL9_4_STABLE [6c66865f3] 2019-06-15 18:23:16 +0100
+-->
+     <para>
+      Improve <application>initdb</application>'s handling of multiple
+      equivalent names for the system time zone (Tom Lane, Andrew Gierth)
+     </para>
+
+     <para>
+      Make <application>initdb</application> examine
+      the <filename>/etc/localtime</filename> symbolic link, if that
+      exists, to break ties between equivalent names for the system time
+      zone.  This makes <application>initdb</application> more likely to
+      select the time zone name that the user would expect when multiple
+      identical time zones exist.  It will not change the behavior
+      if <filename>/etc/localtime</filename> is not a symlink to a zone
+      data file, nor if the time zone is determined from
+      the <envar>TZ</envar> environment variable.
+     </para>
+
+     <para>
+      Separately, prefer <literal>UTC</literal> over other spellings of
+      that time zone, when neither <envar>TZ</envar>
+      nor <filename>/etc/localtime</filename> provide a hint.  This fixes
+      an annoyance introduced by <application>tzdata</application> 2019a's
+      change to make the <literal>UCT</literal> and <literal>UTC</literal>
+      zone names equivalent: <application>initdb</application> was then
+      preferring <literal>UCT</literal>, which almost nobody wants.
+     </para>
+    </listitem>
+
+    <listitem>
+<!--
+Author: Michael Paquier <michael@paquier.xyz>
+Branch: master [e51bad8fb] 2019-05-11 13:00:54 +0900
+Branch: REL_11_STABLE [e16ab408f] 2019-05-11 13:01:07 +0900
+Branch: REL_10_STABLE [c6354e943] 2019-05-11 13:01:12 +0900
+Branch: REL9_6_STABLE [0c132d458] 2019-05-11 13:01:19 +0900
+Branch: REL9_5_STABLE [e17fba8d8] 2019-05-11 13:01:24 +0900
+Branch: REL9_4_STABLE [82ed20e15] 2019-05-11 13:01:29 +0900
+-->
+     <para>
+      Fix misleading error reports
+      from <application>reindexdb</application> (Julien Rouhaud)
+     </para>
+    </listitem>
+
+    <listitem>
+<!--
+Author: Etsuro Fujita <efujita@postgresql.org>
+Branch: master [8b6da83d1] 2019-06-13 17:59:09 +0900
+Branch: REL_11_STABLE [214460182] 2019-06-13 17:59:11 +0900
+Branch: REL_10_STABLE [0f2b23426] 2019-06-13 17:59:12 +0900
+Branch: REL9_6_STABLE [1ade21e7f] 2019-06-13 17:59:13 +0900
+Branch: REL9_5_STABLE [eddb79705] 2019-06-13 17:59:15 +0900
+Branch: REL9_4_STABLE [1a3d9f62c] 2019-06-13 17:59:17 +0900
+-->
+     <para>
+      In <filename>contrib/postgres_fdw</filename>, account for possible
+      data modifications by local <literal>BEFORE ROW UPDATE</literal>
+      triggers (Shohei Mochizuki)
+     </para>
+
+     <para>
+      If a trigger modified a column that was otherwise not changed by the
+      <command>UPDATE</command>, the new value was not transmitted to the
+      remote server.
+     </para>
+    </listitem>
+
+    <listitem>
+<!--
+Author: Noah Misch <noah@leadboat.com>
+Branch: master [d02768ddd] 2019-05-12 10:33:05 -0700
+Branch: REL_11_STABLE [4ec14e5aa] 2019-05-12 10:33:08 -0700
+Branch: REL_10_STABLE [409f5303c] 2019-05-12 10:33:08 -0700
+Branch: REL9_6_STABLE [ff7555c4f] 2019-05-12 10:33:36 -0700
+Branch: REL9_5_STABLE [9dc65bcf9] 2019-05-12 10:34:22 -0700
+Branch: REL9_4_STABLE [08e3fd96f] 2019-05-12 10:34:26 -0700
+-->
+     <para>
+      On Windows, avoid failure when the database encoding is set to
+      SQL_ASCII and we attempt to log a non-ASCII string (Noah Misch)
+     </para>
+
+     <para>
+      The code had been assuming that such strings must be in UTF-8, and
+      would throw an error if they didn't appear to be validly encoded.
+      Now, just transmit the untranslated bytes to the log.
+     </para>
+    </listitem>
+
+    <listitem>
+<!--
+Author: Tom Lane <tgl@sss.pgh.pa.us>
+Branch: master [3f61b3205] 2019-05-31 12:34:54 -0400
+Branch: REL_11_STABLE [312017fcc] 2019-05-31 12:34:54 -0400
+Branch: REL_10_STABLE [683c17b30] 2019-05-31 12:34:54 -0400
+Branch: REL9_6_STABLE [c332c94ad] 2019-05-31 12:34:55 -0400
+Branch: REL9_5_STABLE [da53e4f93] 2019-05-31 12:34:55 -0400
+Branch: REL9_4_STABLE [db5d99916] 2019-05-31 12:34:55 -0400
+-->
+     <para>
+      Make <application>PL/pgSQL</application>'s header files C++-safe
+      (George Tarasov)
+     </para>
+    </listitem>
+
+   </itemizedlist>
+
+  </sect2>
+ </sect1>
+
+ <sect1 id="release-9-4-22">
+  <title>Release 9.4.22</title>
+
+  <formalpara>
+  <title>Release date:</title>
+  <para>2019-05-09</para>
+  </formalpara>
+
+  <para>
+   This release contains a variety of fixes from 9.4.21.
+   For information about new features in the 9.4 major release, see
+   <xref linkend="release-9-4">.
+  </para>
+
+  <para>
+   The <productname>PostgreSQL</productname> community will stop
+   releasing updates for the 9.4.X release series in February 2020.
+   Users are encouraged to update to a newer release branch soon.
+  </para>
+
+  <sect2>
+   <title>Migration to Version 9.4.22</title>
+
+   <para>
+    A dump/restore is not required for those running 9.4.X.
+   </para>
+
+   <para>
+    However, if you are upgrading from a version earlier than 9.4.18,
+    see <xref linkend="release-9-4-18">.
+   </para>
+  </sect2>
+
+  <sect2>
+   <title>Changes</title>
+
+   <itemizedlist>
+
+    <listitem>
+     <para>
+      Fix behavior for an <command>UPDATE</command>
+      or <command>DELETE</command> on an inheritance tree or partitioned
+      table in which every table can be excluded (Amit Langote, Tom Lane)
+     </para>
+
+     <para>
+      In such cases, the query did not report the correct set of output
+      columns when a <literal>RETURNING</literal> clause was present, and
+      if there were any statement-level triggers that should be fired, it
+      didn't fire them.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Fix handling of explicit <literal>DEFAULT</literal> items in
+      an <command>INSERT ... VALUES</command> command with
+      multiple <literal>VALUES</literal> rows, if the target relation is
+      an updatable view (Amit Langote, Dean Rasheed)
+     </para>
+
+     <para>
+      When the updatable view has no default for the column but its
+      underlying table has one, a single-row <command>INSERT
+      ... VALUES</command> will use the underlying table's default.
+      In the multi-row case, however, NULL was always used.  Correct it to
+      act like the single-row case.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Fix <command>CREATE VIEW</command> to allow zero-column views
+      (Ashutosh Sharma)
+     </para>
+
+     <para>
+      We should allow this for consistency with allowing zero-column
+      tables.  Since a table can be converted to a view, zero-column views
+      could be created even with the restriction in place, leading to
+      dump/reload failures.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Accept XML documents as valid values of type <type>xml</type>
+      when <varname>xmloption</varname> is set
+      to <literal>content</literal>, as required by SQL:2006 and later
+      (Chapman Flack)
+     </para>
+
+     <para>
+      Previously <productname>PostgreSQL</productname> followed the
+      SQL:2003 definition, which doesn't allow this.  But that creates a
+      serious problem for dump/restore: there is no setting
+      of <varname>xmloption</varname> that will accept all valid XML data.
+      Hence, switch to the 2006 definition.
+     </para>
+
+     <para>
+      <application>pg_dump</application> is also modified to emit
+      <literal>SET xmloption = content</literal> while restoring data,
+      ensuring that dump/restore works even if the prevailing
+      setting is <literal>document</literal>.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Improve server's startup-time checks for whether a pre-existing
+      shared memory segment is still in use (Noah Misch)
+     </para>
+
+     <para>
+      The postmaster is now more likely to detect that there are still
+      active processes from a previous postmaster incarnation, even if
+      the <filename>postmaster.pid</filename> file has been removed.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Fix incompatibility of GIN-index WAL records (Alexander Korotkov)
+     </para>
+
+     <para>
+      A fix applied in February's minor releases was not sufficiently
+      careful about backwards compatibility, leading to problems if a
+      standby server of that vintage reads GIN page-deletion WAL records
+      generated by a primary server of a previous minor release.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Tolerate <literal>EINVAL</literal> and <literal>ENOSYS</literal>
+      error results, where appropriate, for <function>fsync</function>
+      and <function>sync_file_range</function> calls
+      (Thomas Munro, James Sewell)
+     </para>
+
+     <para>
+      The previous change to panic on file synchronization failures turns
+      out to have been excessively paranoid for certain cases where a
+      failure is predictable and essentially means <quote>operation not
+      supported</quote>.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Fix <quote>failed to build any <replaceable>N</replaceable>-way
+      joins</quote> planner failures with lateral references leading out
+      of <literal>FULL</literal> outer joins (Tom Lane)
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Check the appropriate user's permissions when enforcing rules about
+      letting a leaky operator see <structname>pg_statistic</structname>
+      data (Dean Rasheed)
+     </para>
+
+     <para>
+      When an underlying table is being accessed via a view, consider the
+      privileges of the view owner while deciding whether leaky operators
+      may be applied to the table's statistics data, rather than the
+      privileges of the user making the query.  This makes the planner's
+      rules about what data is visible match up with the executor's,
+      avoiding unnecessarily-poor plans.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Avoid O(N^2) performance issue when rolling back a transaction that
+      created many tables (Tomas Vondra)
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Fix race conditions in management of dynamic shared memory
+      (Thomas Munro)
+     </para>
+     <para>
+      These could lead to <quote>dsa_area could not attach to
+      segment</quote> or <quote>cannot unpin a segment that is not
+      pinned</quote> errors.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Fix race condition in which a hot-standby postmaster could fail to
+      shut down after receiving a smart-shutdown request (Tom Lane)
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Tighten validation of encoded SCRAM-SHA-256 and MD5 passwords
+      (Jonathan Katz)
+     </para>
+
+     <para>
+      A password string that had the right initial characters could be
+      mistaken for one that is correctly hashed into SCRAM-SHA-256 or MD5
+      format.  The password would be accepted but would be unusable later.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Fix handling of <varname>lc_time</varname> settings that imply an
+      encoding different from the database's encoding (Juan Jos&eacute;
+      Santamar&iacute;a Flecha, Tom Lane)
+     </para>
+
+     <para>
+      Localized month or day names that include non-ASCII characters
+      previously caused unexpected errors or wrong output in such locales.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Disallow <literal>NaN</literal> as a value for floating-point server
+      parameters (Tom Lane)
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Rearrange <command>REINDEX</command> processing to avoid assertion
+      failures when reindexing individual indexes
+      of <structname>pg_class</structname> (Andres Freund, Tom Lane)
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Fix planner assertion failure for parameterized dummy paths (Tom Lane)
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Insert correct test function in the result
+      of <function>SnapBuildInitialSnapshot()</function> (Antonin Houska)
+     </para>
+
+     <para>
+      No core code cares about this, but some extensions do.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Fix intermittent <quote>could not reattach to shared memory</quote>
+      session startup failures on Windows (Noah Misch)
+     </para>
+
+     <para>
+      A previously unrecognized source of these failures is creation of
+      thread stacks for a process's default thread pool.  Arrange for such
+      stacks to be allocated in a different memory region.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Fix error detection in directory scanning on Windows (Konstantin
+      Knizhnik)
+     </para>
+
+     <para>
+      Errors, such as lack of permissions to read the directory, were not
+      detected or reported correctly; instead the code silently acted as
+      though the directory were empty.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Fix grammar problems in <application>ecpg</application> (Tom Lane)
+     </para>
+
+     <para>
+      A missing semicolon led to mistranslation
+      of <literal>SET <replaceable>variable</replaceable> =
+      DEFAULT</literal> (but
+      not <literal>SET <replaceable>variable</replaceable> TO
+      DEFAULT</literal>) in <application>ecpg</application> programs,
+      producing syntactically invalid output that the server would reject.
+      Additionally, in a <command>DROP TYPE</command> or <command>DROP
+      DOMAIN</command> command that listed multiple type names, only the
+      first type name was actually processed.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Fix possible buffer overruns in <application>ecpg</application>'s
+      processing of include filenames (Liu Huailing, Fei Wu)
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Avoid crash in <filename>contrib/vacuumlo</filename> if
+      an <function>lo_unlink()</function> call failed (Tom Lane)
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Sync our copy of the timezone library with IANA tzcode release 2019a
+      (Tom Lane)
+     </para>
+
+     <para>
+      This corrects a small bug in <application>zic</application> that
+      caused it to output an incorrect year-2440 transition in
+      the <literal>Africa/Casablanca</literal> zone, and adds support
+      for <application>zic</application>'s new <option>-r</option> option.
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Update time zone data files to <application>tzdata</application>
+      release 2019a for DST law changes in Palestine and Metlakatla,
+      plus historical corrections for Israel.
+     </para>
+
+     <para>
+      <literal>Etc/UCT</literal> is now a backward-compatibility link
+      to <literal>Etc/UTC</literal>, instead of being a separate zone that
+      generates the abbreviation <literal>UCT</literal>, which nowadays is
+      typically a typo.  <productname>PostgreSQL</productname> will still
+      accept <literal>UCT</literal> as an input zone abbreviation, but it
+      won't output it.
+     </para>
+    </listitem>
+
+   </itemizedlist>
+
+  </sect2>
+ </sect1>
+
  <sect1 id="release-9-4-21">
   <title>Release 9.4.21</title>
 
